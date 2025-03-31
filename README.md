@@ -4,7 +4,6 @@
 
 This repository provides a package for performing operations on image concepts using IP-Adapter's CLIP embeddings and transferring these concepts to other images.
 For details, see the arXiv paper.
-This repository is based on [IP-Adapter](https://github.com/tencent-ailab/IP-Adapter), licensed under the Apache License 2.0.
 
 ![cover](./images/cover.jpg)
 Figure 1. Conventional visual concept translation vs. the proposed visual concept blending. In conventional methods, it is difficult to distinguish the features that should be transferred because only a single reference image is available. Our proposed method can effectively control the features we wish to transfer (e.g., illustration style or tiger stripes) by performing operations in the projection space of the CLIP embedding vectors and extracting a common concept from multiple reference images. Adapted from [Makino et al., arXiv:2503.21277].
