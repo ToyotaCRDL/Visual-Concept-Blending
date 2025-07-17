@@ -29,14 +29,12 @@ from .resampler import Resampler
 class VCB(IPAdapter):
     def __init__(self, sd_pipe, image_encoder_path, ip_ckpt, device, num_tokens=4):
         super().__init__(sd_pipe, image_encoder_path, ip_ckpt, device, num_tokens)
-
     def generate_image_vcb(
         self,
         pil_image=None,
         clip_image_embeds=None,
         prompt=None,
-        ref_image1=None,
-        ref_image2=None,
+        ref_images: List[Image.Image]=None,   # ← now a list of refs
         negative_prompt=None,
         scale=1.0,
         num_samples=1,
@@ -72,58 +70,71 @@ class VCB(IPAdapter):
             pil_image=pil_image, clip_image_embeds=clip_image_embeds
         )
 
-        # ref image1
-        ref_image1_prompt_embeds, uncond_ref_image1_prompt_embeds = self.get_image_embeds(
-            pil_image=ref_image1, clip_image_embeds=None
-        )
+        # reference images
+        if not ref_images or len(ref_images) < 2:
+            raise ValueError("You must pass at least two reference images in ref_images list.")
+        ref_embeds = []
+        uncond_ref_embeds = []
+        for ref in ref_images:
+            e, ue = self.get_image_embeds(pil_image=ref, clip_image_embeds=None)
+            ref_embeds.append(e)
+            uncond_ref_embeds.append(ue)
+
+        # stack along new dim=0: shape = [n_refs, batch, seq_len, dim]
+        stacked = torch.stack(ref_embeds, dim=0)
+        uncond_stacked = torch.stack(uncond_ref_embeds, dim=0)
+
+        # compute mean across refs: shape [batch, seq_len, dim]
+        avg_ref = stacked.mean(dim=0)
+        avg_uncond_ref = uncond_stacked.mean(dim=0)
         
-        # ref image2
-        ref_image2_prompt_embeds, uncond_ref_image2_prompt_embeds = self.get_image_embeds(
-            pil_image=ref_image2, clip_image_embeds=None
-        )
+        # compute absolute difference of each ref to the mean, then take the max
+        # diff_from_mean: [batch, seq_len, dim]
+        diff_from_mean, _ = (stacked - avg_ref).abs().max(dim=0)
 
-        # tensor operation between ref1 and ref2
-        diff_embeds = torch.abs(ref_image1_prompt_embeds - ref_image2_prompt_embeds)
-        embeds_similarity = torch.where(diff_embeds < theta, 1, 0)
+        # build a similarity mask where locations with diff < theta are “common”
+        embeds_similarity = torch.where(diff_from_mean < theta, 1.0, 0.0)
+
+        # mix
         if common:
-            # image mix
-            mixed_image_prompt_embeds = \
-                image_prompt_embeds * (1.0 - embeds_similarity) \
-                + ref_image1_prompt_embeds * 0.5 * embeds_similarity \
-                + ref_image2_prompt_embeds * 0.5 * embeds_similarity
-            uncond_mixed_image_prompt_embeds = \
-                uncond_image_prompt_embeds * (1.0 - embeds_similarity) \
-                + uncond_ref_image1_prompt_embeds * 0.5 * embeds_similarity \
-                + uncond_ref_image2_prompt_embeds * 0.5 * embeds_similarity
-        else:            
-            # image mix
-            mixed_image_prompt_embeds = \
-                image_prompt_embeds * embeds_similarity \
-                + ref_image1_prompt_embeds * (1.0 - embeds_similarity)
-            uncond_mixed_image_prompt_embeds = \
-                uncond_image_prompt_embeds * embeds_similarity \
-                + uncond_ref_image1_prompt_embeds * (1.0 - embeds_similarity)
+            mixed_embeds = (
+                (1.0 - embeds_similarity) * image_prompt_embeds
+                + embeds_similarity * avg_ref
+            )
+            mixed_uncond = (
+                (1.0 - embeds_similarity) * uncond_image_prompt_embeds
+                + embeds_similarity * avg_uncond_ref
+            )
+        else:
+            mixed_embeds = (
+                embeds_similarity * image_prompt_embeds
+                + (1.0 - embeds_similarity) * ref_embeds[0]
+            )
+            mixed_uncond = (
+                embeds_similarity * uncond_image_prompt_embeds
+                + (1.0 - embeds_similarity) * uncond_ref_embeds[0]
+            )
 
-        # generate images
-        bs_embed, seq_len, _ = mixed_image_prompt_embeds.shape
-        mixed_image_prompt_embeds = mixed_image_prompt_embeds.repeat(1, num_samples, 1)
-        mixed_image_prompt_embeds = mixed_image_prompt_embeds.view(bs_embed * num_samples, seq_len, -1)
-        uncond_mixed_image_prompt_embeds = uncond_mixed_image_prompt_embeds.repeat(1, num_samples, 1)
-        uncond_mixed_image_prompt_embeds = uncond_mixed_image_prompt_embeds.view(bs_embed * num_samples, seq_len, -1)
+        # reshape for classifier-free guidance
+        bs, seq_len, dim = mixed_embeds.shape
+        mixed_embeds = mixed_embeds.repeat(1, num_samples, 1).view(bs * num_samples, seq_len, dim)
+        mixed_uncond = mixed_uncond.repeat(1, num_samples, 1).view(bs * num_samples, seq_len, dim)
 
+        # encode text prompts
         with torch.inference_mode():
-            prompt_embeds_, negative_prompt_embeds_ = self.pipe.encode_prompt(
+            txt_embeds, txt_uncond = self.pipe.encode_prompt(
                 prompt,
                 device=self.device,
                 num_images_per_prompt=num_samples,
                 do_classifier_free_guidance=True,
                 negative_prompt=negative_prompt,
             )
-            prompt_embeds = torch.cat([prompt_embeds_, mixed_image_prompt_embeds], dim=1)
-            negative_prompt_embeds = torch.cat([negative_prompt_embeds_, uncond_mixed_image_prompt_embeds], dim=1)
+            prompt_embeds = torch.cat([txt_embeds, mixed_embeds], dim=1)
+            negative_prompt_embeds = torch.cat([txt_uncond, mixed_uncond], dim=1)
 
+        # generate
         generator = torch.Generator(self.device).manual_seed(seed) if seed is not None else None
-        images = self.pipe(
+        outputs = self.pipe(
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
             guidance_scale=guidance_scale,
@@ -133,6 +144,5 @@ class VCB(IPAdapter):
             width=width,
             height=height,
             **kwargs,
-        ).images
-
-        return images
+        )
+        return outputs.images

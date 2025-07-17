@@ -38,22 +38,21 @@ git clone https://github.com/isl-org/ZoeDepth.git
 
 7. Install the required libraries
 ```
-pip install diffusers==0.22.1 transformers==4.42.4 huggingface-hub==0.23.3 einops accelerate pandas pytorch-lightning requests urllib3 certifi imutils==0.5.4 timm==0.6.7 einops==0.6.0 opencv-python notebook ipywidgets
+pip install diffusers==0.22.1 transformers==4.42.4 huggingface-hub==0.23.3 accelerate pandas pytorch-lightning requests urllib3 certifi imutils==0.5.4 timm==0.6.7 einops==0.6.0 opencv-python notebook ipywidgets
 ```
 
 
 ## Run
 
-### 1. CUI
+### 1. CLI
 ```
-python visual_concept_blending.py -k <key_img> -r1 <ref_img1> -r2 <ref_img2> -o <output_dir>
+python visual_concept_blending.py -k <key_img> -r <ref_img1> <ref_img2> -o <output_dir>
 ```
-For example, `python visual_concept_blending.py -k bird.png -r1 cat_art.png -r2 dog_art.png -o images -t 0.6 -d 1.0`
+For example, `python visual_concept_blending.py -k bird.png -r cat_art.png dog_art.png -o images -t 0.6 -d 1.0`
 
 #### Required Arguments
-- `-k`, `--key_img_path`: Path to the key image.  
-- `-r1`, `--ref_img1_path`: Path to the first reference image.  
-- `-r2`, `--ref_img2_path`: Path to the second reference image.  
+- `-k`, `--key_img_path`: Path to the key image. 
+- `-r`, `--ref_img_paths`: Paths to two or more reference images (space-separated). 
 - `-o`, `--output_dir`: Directory to save result images.  
 
 #### Optional Arguments
@@ -65,7 +64,7 @@ For example, `python visual_concept_blending.py -k bird.png -r1 cat_art.png -r2 
     - `--distinctive`: Disable 'common' and use 'distinctive' concept transfer instead.  
 
 
-### 2. In jupyter notebook
+### 2. In Jupyter Notebook
 ```
 jupyter notebook
 ```
