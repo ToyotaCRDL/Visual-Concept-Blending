@@ -34,7 +34,7 @@ def generate_depth_map_if_none(img, depth_map=None):
 
 class VisualConceptBlending():
     def __init__(self, common=True):
-        self.common = common # transfer the common properties of the two reference images to the key image
+        self.common = common # transfer the common properties of the two reference images to the source image
 
         base_model_path = "runwayml/stable-diffusion-v1-5"
         vae_model_path = "stabilityai/sd-vae-ft-mse"
@@ -90,7 +90,7 @@ class VisualConceptBlending():
         depth_scale=1.0
     ):
         """
-        Generate images by transferring features from multiple reference images to the key image.
+        Generate images by transferring features from multiple reference images to the source image.
         Uses a depth map as a ControlNet condition.
 
         Args:
@@ -134,7 +134,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run Image Concept Transfer from the command line.")
 
     # required arguments
-    parser.add_argument("-k", "--key_img_path", required=True, help="Path to the key image.")
+    parser.add_argument("-k", "--src_img_path", required=True, help="Path to the source image.")
     parser.add_argument("-r", "--ref_img_paths", nargs="+", required=True, help="Paths to two or more reference images (space separated).")
     parser.add_argument("-o", "--output_dir", required=True, help="Directory to save result images.")
 
@@ -150,7 +150,7 @@ def main():
     args = parser.parse_args()
     if len(args.ref_img_paths) < 2:
         parser.error("You must specify at least two reference images.")
-    key_img_path = args.key_img_path
+    src_img_path = args.src_img_path
     ref_img_paths = args.ref_img_paths
     output_dir = args.output_dir
 
@@ -159,13 +159,13 @@ def main():
     theta = args.theta
     depth_scale = args.depth_scale
 
-    key_img_name = os.path.basename(key_img_path).split('.')[0]
+    src_img_name = os.path.basename(src_img_path).split('.')[0]
     ref_img_names = [os.path.basename(p).split('.')[0] for p in ref_img_paths]
     ref_names_joined = "_".join(ref_img_names)
     common_or_distinct = 'common' if common else 'distinct'
 
     # load images    
-    key_img = Image.open(key_img_path).convert('RGB').resize((512, 512))
+    src_img = Image.open(src_img_path).convert('RGB').resize((512, 512))
     ref_imgs = [
         Image.open(p).convert('RGB').resize((512, 512))
         for p in ref_img_paths
@@ -175,7 +175,7 @@ def main():
     cur_time = time.strftime('%Y%m%d_%H%M%S', time.localtime(time.time()))
     ip = VisualConceptBlending(common=common)
     output_imgs, depth_map = ip.run(
-        key_img,
+        src_img,
         ref_imgs,
         seed=SEED,
         theta=theta,
@@ -186,10 +186,10 @@ def main():
     # save
     out_img = output_imgs[0].resize((512, 512))
     out_img.save(
-        f'{output_dir}/{cur_time}_{common_or_distinct}_key_{key_img_name}_refs_{ref_names_joined}_theta_{theta}.png'
+        f'{output_dir}/{cur_time}_{common_or_distinct}_src_{src_img_name}_refs_{ref_names_joined}_theta_{theta}.png'
     )
     depth_map.save(
-        f'{output_dir}/{cur_time}_{common_or_distinct}_key_{key_img_name}_depth_map.png'
+        f'{output_dir}/{cur_time}_{common_or_distinct}_src_{src_img_name}_depth_map.png'
     )
 
 
