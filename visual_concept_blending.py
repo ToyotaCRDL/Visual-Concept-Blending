@@ -134,7 +134,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run Image Concept Transfer from the command line.")
 
     # required arguments
-    parser.add_argument("-k", "--src_img_path", required=True, help="Path to the source image.")
+    parser.add_argument("-s", "--src_img_path", required=True, help="Path to the source image.")
     parser.add_argument("-r", "--ref_img_paths", nargs="+", required=True, help="Paths to two or more reference images (space separated).")
     parser.add_argument("-o", "--output_dir", required=True, help="Directory to save result images.")
 

@@ -46,12 +46,12 @@ pip install diffusers==0.22.1 transformers==4.42.4 huggingface-hub==0.23.3 accel
 
 ### 1. CLI
 ```
-python visual_concept_blending.py -k <key_img> -r <ref_img1> <ref_img2> -o <output_dir>
+python visual_concept_blending.py -k <src_img> -r <ref_img1> <ref_img2> -o <output_dir>
 ```
-For example, `python visual_concept_blending.py -k bird.png -r cat_art.png dog_art.png -o images -t 0.6 -d 1.0`
+For example, `python visual_concept_blending.py -s bird.png -r cat_art.png dog_art.png -o images -t 0.6 -d 1.0`
 
 #### Required Arguments
-- `-k`, `--key_img_path`: Path to the key image. 
+- `-s`, `--src_img_path`: Path to the source image. 
 - `-r`, `--ref_img_paths`: Paths to two or more reference images (space-separated). 
 - `-o`, `--output_dir`: Directory to save result images.  
 
